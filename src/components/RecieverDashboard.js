@@ -15,122 +15,97 @@ import {
   Star,
 } from "lucide-react";
 
+const API_BASE = "http://localhost:6069/api";
 const ReceiverDashboard = () => {
   const [activeTab, setActiveTab] = useState("browse");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [notifications, setNotifications] = useState(3);
+  const [myRequests, setMyRequests] = useState([]);
 
   // Mock data for food posts
-  const [foodPosts, setFoodPosts] = useState([
-    {
-      id: 1,
-      title: "Fresh Vegetable Surplus",
-      description:
-        "50kg mixed vegetables including carrots, potatoes, and onions. Perfect condition, just excess from our restaurant.",
-      donor: "Green Garden Restaurant",
-      location: "Downtown Area",
-      distance: "2.3 km",
-      quantity: "50kg",
-      category: "vegetables",
-      expiryTime: "6 hours",
-      postedTime: "2 hours ago",
-      image: "/api/placeholder/300/200",
-      rating: 4.8,
-      verified: true,
-    },
-    {
-      id: 2,
-      title: "Bakery Items - End of Day",
-      description:
-        "Assorted bread, pastries, and cakes from today's batch. All items are fresh and safe to consume.",
-      donor: "Sweet Dreams Bakery",
-      location: "North Street",
-      distance: "1.8 km",
-      quantity: "30 items",
-      category: "bakery",
-      expiryTime: "4 hours",
-      postedTime: "1 hour ago",
-      image: "/api/placeholder/300/200",
-      rating: 4.9,
-      verified: true,
-    },
-    {
-      id: 3,
-      title: "Cooked Meals Available",
-      description:
-        "20 portions of home-cooked meals including rice, dal, and vegetables. Prepared with care and hygiene.",
-      donor: "Community Kitchen",
-      location: "Central Park",
-      distance: "3.1 km",
-      quantity: "20 portions",
-      category: "cooked",
-      expiryTime: "2 hours",
-      postedTime: "30 minutes ago",
-      image: "/api/placeholder/300/200",
-      rating: 4.7,
-      verified: true,
-    },
-  ]);
+  const [foodPosts, setFoodPosts] = useState([]);
 
-  // Mock data for requests
-  const [myRequests, setMyRequests] = useState([
-    {
-      id: 1,
-      postTitle: "Fresh Vegetable Surplus",
-      donor: "Green Garden Restaurant",
-      status: "pending",
-      requestedAt: "2 hours ago",
-      quantity: "10kg",
-      message: "We can collect within 2 hours. Thank you for your generosity.",
-    },
-    {
-      id: 2,
-      postTitle: "Bakery Items - End of Day",
-      donor: "Sweet Dreams Bakery",
-      status: "approved",
-      requestedAt: "1 day ago",
-      quantity: "15 items",
-      message: "Perfect for our community center breakfast program.",
-    },
-    {
-      id: 3,
-      postTitle: "Canned Food Donation",
-      donor: "Metro Supermarket",
-      status: "completed",
-      requestedAt: "3 days ago",
-      quantity: "25 cans",
-      message: "Successfully collected and distributed to families in need.",
-    },
-  ]);
+  useEffect(() => {
+    const fetchFoods = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/foods`);
+        const data = await res.json();
+        setFoodPosts(data);
+      } catch (error) {
+        console.error("Failed to fetch foods:", error);
+      }
+    };
+
+    fetchFoods();
+  }, []);
+
+  useEffect(() => {
+    const fetchRequests = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/foods/requests/my`);
+        const data = await res.json();
+        setMyRequests(data);
+      } catch (error) {
+        console.error("Failed to fetch requests:", error);
+      }
+    };
+
+    fetchRequests();
+  }, []);
 
   const filteredPosts = foodPosts.filter((post) => {
+    const donorName = post.donor?.name || ""; // safely access donor name
+    const category = post.category || ""; // fallback if category is missing
+
     const matchesSearch =
-      post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      post.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      post.donor.toLowerCase().includes(searchTerm.toLowerCase());
+      post.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      post.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      donorName.toLowerCase().includes(searchTerm.toLowerCase());
+
     const matchesCategory =
-      filterCategory === "all" || post.category === filterCategory;
+      filterCategory === "all" || category === filterCategory;
+
     return matchesSearch && matchesCategory;
   });
 
-  const handleSendRequest = (postId, message, quantity) => {
-    // Simulate sending request
-    console.log(
-      `Request sent for post ${postId}: ${message}, Quantity: ${quantity}`,
-    );
-    // Add to requests list
-    const post = foodPosts.find((p) => p.id === postId);
-    const newRequest = {
-      id: myRequests.length + 1,
-      postTitle: post.title,
-      donor: post.donor,
-      status: "pending",
-      requestedAt: "Just now",
-      quantity: quantity,
-      message: message,
-    };
-    setMyRequests([newRequest, ...myRequests]);
+  const handleSendRequest = async (postId, message, quantity) => {
+    try {
+      const res = await fetch(`${API_BASE}/foods/${postId}/request`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          requester: "665f4cbd2ec4e59e2a257a9a", // replace with real user ID or auth token logic later
+          quantityRequested: quantity,
+          message: message,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        // Refresh requests list after sending
+        setMyRequests((prev) => [
+          {
+            id: data.request._id,
+            postTitle: data.request.food.title,
+            donor:
+              data.request.donor.organizationName ||
+              `${data.request.donor.firstName} ${data.request.donor.lastName}`,
+            status: data.request.status,
+            requestedAt: "Just now",
+            quantity: data.request.quantityRequested,
+            message: data.request.message,
+          },
+          ...prev,
+        ]);
+      } else {
+        console.error("Request failed:", data.message);
+      }
+    } catch (error) {
+      console.error("Error sending request:", error);
+    }
   };
 
   const getStatusColor = (status) => {
